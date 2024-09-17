@@ -3,6 +3,9 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+
+using SQLite;
 
 namespace Vaultracks;
 
@@ -32,51 +35,23 @@ public class Program {
 
 		app.MapGet("/", () => Results.Redirect("/index.html"));
 
-		//app.MapGet("/", () => Results.Redirect(DatabaseExists ? "/index.html" : "/setup.html"));
-
-		/*app.MapPost("/api/postMessage/abc", async context => {
-
-			app.Logger.LogInformation("Query: {query}", context.Request.QueryString.Value);
-			app.Logger.LogInformation("Headers: {headers}", context.Request.Headers.Select(header => $"{header.Key}: {string.Join("|", header.Value)}"));
-
-			using StreamReader sr = new(context.Request.Body);
-
-			app.Logger.LogInformation("Body: {body}", await sr.ReadToEndAsync());
-
-			context.Response.StatusCode = StatusCodes.Status404NotFound;
-
-		});*/
-
-		/*app.MapGet("/setup.html", () => {
-
-			if(databaseExists) {
-
-				return Results.Redirect("/index.html");
-
-			}
-
-			return Results.
-
-		});*/
-
-		/*RewriteOptions rewriteOptions = new();
-
-		rewriteOptions.Add(context => {
-
-			HttpContext httpContext = context.HttpContext;
-
-			if(httpContext.Request.Path.Value == "/setup.html" &&
-				DatabaseExists) {
-
-				httpContext.Request.Path = "/";
-
-			}
-
-		});
-
-		app.UseRewriter(rewriteOptions);*/
-
 		app.MapControllers();
+
+		app.Lifetime
+			.ApplicationStopping
+			.Register(async () => {
+
+				app.Logger.LogInformation("Closing db connections...");
+
+				foreach((string Username, SQLiteAsyncConnection Db) in ApiController.ActiveDatabaseConnections) {
+
+					await Db.CloseAsync();
+
+					app.Logger.LogInformation("Closing db for {username}", Username);
+
+				}
+
+			});
 
 		app.Run();
 

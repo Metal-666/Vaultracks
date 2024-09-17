@@ -21,9 +21,13 @@
   </head>
 
   <body
-    class="mocha m-0 flex size-full content-center justify-center bg-gradient-to-br from-surface0 to-crust p-0 font-mono text-text"
+    class="mocha m-0 flex flex-col size-full content-stretch justify-stretch bg-gradient-to-br from-surface0 to-crust p-0 font-mono text-text"
   >
-    <div id="map" class="w-full h-full"></div>
+    <header class="h-10">
+      <span class="h-full text-lg">Vaultracks</span>
+    </header>
+    <div id="map" class="h-full"></div>
+
     <script>
       var map = L.map("map").setView([51.505, -0.09], 13);
 
