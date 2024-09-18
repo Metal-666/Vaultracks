@@ -43,11 +43,11 @@ public class Program {
 
 				app.Logger.LogInformation("Closing db connections...");
 
-				foreach((string Username, SQLiteAsyncConnection Db) in ApiController.ActiveDatabaseConnections) {
+				foreach((DBAccess dbAccess, SQLiteAsyncConnection Db) in ApiController.ActiveDatabaseConnections) {
 
 					await Db.CloseAsync();
 
-					app.Logger.LogInformation("Closing db for {username}", Username);
+					app.Logger.LogInformation("Closing db for {username}", dbAccess.Username);
 
 				}
 

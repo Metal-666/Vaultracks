@@ -22,7 +22,7 @@ public class ApiController : ControllerBase {
 
 	public const string DataDirectory = "/data";
 
-	public static ConcurrentDictionary<string, SQLiteAsyncConnection> ActiveDatabaseConnections { get; protected set; } =
+	public static ConcurrentDictionary<DBAccess, SQLiteAsyncConnection> ActiveDatabaseConnections { get; protected set; } =
 		new();
 
 	protected virtual ILogger Logger { get; set; }
@@ -33,7 +33,7 @@ public class ApiController : ControllerBase {
 
 	}
 
-	[HttpPost("postMessage")]
+	[HttpPost("message")]
 	[ProducesResponseType(StatusCodes.Status200OK)]
 	[ProducesResponseType(StatusCodes.Status400BadRequest)]
 	public virtual async Task<ActionResult> PostMessage([FromHeader(Name = "Authorization")] string base64auth) {
@@ -69,45 +69,25 @@ public class ApiController : ControllerBase {
 
 		}
 
-		const string BasicAuthPrefix = "Basic ";
+		DBAccess? dbAccess = ParseAuth(base64auth);
 
-		if(!base64auth.StartsWith(BasicAuthPrefix)) {
+		if(dbAccess == null) {
 
-			return BadRequest("Please use HTTP Basic Authentication to pass the database key!");
+			return BadRequest("Please use HTTP Basic Authentication to pass username and database key!");
 
 		}
 
-		string[] auth =
-			Encoding.UTF8
-					.GetString(Convert.FromBase64String(base64auth[BasicAuthPrefix.Length..]))
-					.Split(':');
+		SQLiteAsyncConnection? db = await GetOrCreateDB(dbAccess);
 
-		(string Username, string DatabaseKey) = (auth[0], auth[1]);
+		if(db == null) {
 
-		if(!ActiveDatabaseConnections.TryGetValue(Username, out SQLiteAsyncConnection? db)) {
-
-			db = new(new SQLiteConnectionString(GetDatabaseFilePath(Username),
-																				SQLiteOpenFlags.ReadWrite |
-																							SQLiteOpenFlags.Create |
-																							SQLiteOpenFlags.FullMutex,
-																				true,
-																				DatabaseKey));
-
-			if(!ActiveDatabaseConnections.TryAdd(Username, db)) {
-
-				await db.CloseAsync();
-
-				return Problem("Failed to initialize the database, please try again!");
-
-			}
+			return Problem("Failed to initialize the database, please try again!");
 
 		}
 
 		int rowsWritten;
 
 		try {
-
-			await db.CreateTableAsync<Location>();
 
 			rowsWritten = await db.InsertAsync(location);
 
@@ -131,10 +111,103 @@ public class ApiController : ControllerBase {
 
 	}
 
+	[HttpGet("location/latest")]
+	public virtual async Task<ActionResult<Location>> GetLatestLocation([FromHeader(Name = "Authorization")] string base64auth) {
+
+		DBAccess? dbAccess = ParseAuth(base64auth);
+
+		if(dbAccess == null) {
+
+			return BadRequest("Please use HTTP Basic Authentication to pass username and database key!");
+
+		}
+
+		SQLiteAsyncConnection? db = await GetOrCreateDB(dbAccess);
+
+		if(db == null) {
+
+			return Problem("Failed to open the database!");
+
+		}
+
+		Location? location =
+			await db.Table<Location>()
+					.OrderByDescending(location =>
+													location.CreatedAt)
+					.FirstOrDefaultAsync();
+
+		if(location == null) {
+
+			return Problem("");
+
+		}
+
+		return location;
+
+	}
+
+	protected virtual DBAccess? ParseAuth(string base64auth) {
+
+		const string BasicAuthPrefix = "Basic ";
+
+		if(!base64auth.StartsWith(BasicAuthPrefix)) {
+
+			return null;
+
+		}
+
+		string[] auth =
+			Encoding.UTF8
+					.GetString(Convert.FromBase64String(base64auth[BasicAuthPrefix.Length..]))
+					.Split(':');
+
+		return new(auth[0], auth[1]);
+
+	}
+
+	protected virtual async Task<SQLiteAsyncConnection?> GetOrCreateDB(DBAccess dbAccess) {
+
+		try {
+
+			if(!ActiveDatabaseConnections.TryGetValue(dbAccess, out SQLiteAsyncConnection? db)) {
+
+				db = new(new SQLiteConnectionString(GetDatabaseFilePath(dbAccess.Username),
+																					SQLiteOpenFlags.ReadWrite |
+																								SQLiteOpenFlags.Create |
+																								SQLiteOpenFlags.FullMutex,
+																					true,
+																					dbAccess.DatabaseKey));
+
+				await db.CreateTableAsync<Location>();
+
+				if(!ActiveDatabaseConnections.TryAdd(dbAccess, db)) {
+
+					await db.CloseAsync();
+
+					return null;
+
+				}
+
+			}
+
+			return db;
+
+		}
+
+		catch {
+
+			return null;
+
+		}
+
+	}
+
 	public static string GetDatabaseFilePath(string username) =>
 		Path.Combine(DataDirectory, $"{username}.db");
 
 }
+
+public record DBAccess(string Username, string DatabaseKey);
 
 public static class PayloadType {
 

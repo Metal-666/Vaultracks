@@ -1,6 +1,7 @@
 <html>
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
     <link
       rel="stylesheet"
       href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -8,6 +9,7 @@
       crossorigin=""
     />
     <link rel="stylesheet" href="/css/styles.min.css" />
+
     <script
       src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
       integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
@@ -21,21 +23,28 @@
   </head>
 
   <body
-    class="mocha m-0 flex flex-col size-full content-stretch justify-stretch bg-gradient-to-br from-surface0 to-crust p-0 font-mono text-text"
+    class="mocha m-0 flex size-full flex-col content-stretch justify-stretch bg-gradient-to-br from-surface0 to-crust p-0 font-mono text-text"
   >
     <header class="h-10">
       <span class="h-full text-lg">Vaultracks</span>
     </header>
+
     <div id="map" class="h-full"></div>
 
-    <script>
-      var map = L.map("map").setView([51.505, -0.09], 13);
+    <dialog
+      id="openDatabaseDialog"
+      class="flex flex-col rounded-md bg-crust/50 text-text backdrop-blur-md"
+    >
+      <div class="bg-crust/50 p-1">
+        <span>Open database</span>
+      </div>
+      <form method="dialog" class="m-0 flex flex-col p-2">
+        <label class="mb-2 mt-1">Username: <input class="text-input" /></label>
+        <label class="mb-3">Database Key: <input class="text-input" /></label>
+        <button class="button-primary">Open</button>
+      </form>
+    </dialog>
 
-      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        maxZoom: 19,
-        attribution:
-          '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-      }).addTo(map);
-    </script>
+    <script src="/scripts/index.js"></script>
   </body>
 </html>

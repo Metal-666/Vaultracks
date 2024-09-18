@@ -1,0 +1,12 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .text-input {
+    @apply rounded-sm bg-crust/25 outline-none backdrop-blur-sm;
+  }
+  .button-primary {
+    @apply rounded-md bg-mauve/50 backdrop-blur-sm backdrop-brightness-75;
+  }
+}
