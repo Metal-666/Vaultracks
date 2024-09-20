@@ -1,10 +1,13 @@
 const openDatabaseDialogBarrier = document.getElementById(
-  "openDatabaseDialogBarrier",
+  "open-database-dialog-barrier",
 ) as HTMLElement;
 const usernameInput = document.getElementById(
-  "usernameInput",
+  "username-input",
 ) as HTMLInputElement;
-const dbKeyInput = document.getElementById("dbKeyInput") as HTMLInputElement;
+const dbKeyInput = document.getElementById("db-key-input") as HTMLInputElement;
+const locationPopupContentTemplate = document.getElementById(
+  "location-popup-content-template",
+) as HTMLTemplateElement;
 
 const map = L.map("map").setView([51.505, -0.09], 13);
 
@@ -50,6 +53,21 @@ async function openDatabase() {
   const latLng: L.LatLngExpression = [location.lat, location.lon];
 
   const marker = L.marker(latLng).addTo(map);
+
+  const locationPopupContent = locationPopupContentTemplate.content
+    .cloneNode(true) as DocumentFragment;
+
+  const dateAndTime = locationPopupContent.getElementById(
+    "date-and-time",
+  ) as HTMLElement;
+
+  dateAndTime.textContent = new Date(location.created_at * 1000).toUTCString();
+  dateAndTime.id = "";
+
+  marker.bindPopup(locationPopupContent.getRootNode() as HTMLElement, {
+    className: "map-popup",
+  })
+    .openPopup();
 
   map.flyTo(latLng, 15);
 

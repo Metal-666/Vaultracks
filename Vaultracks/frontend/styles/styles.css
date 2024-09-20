@@ -4,9 +4,22 @@
 
 @layer components {
   .text-input {
-    @apply rounded-sm bg-crust/25 outline-none backdrop-blur-sm;
+    @apply rounded-sm bg-crust/25 px-1 outline-none backdrop-blur-sm;
   }
   .button-primary {
-    @apply rounded-md bg-mauve/50 backdrop-blur-sm backdrop-brightness-75;
+    @apply rounded-md bg-mauve/60 uppercase backdrop-blur-sm backdrop-brightness-75;
+  }
+  .map-popup {
+    @apply rounded-md;
+  }
+  .map-popup > .leaflet-popup-content-wrapper {
+    @apply rounded-none bg-transparent text-text shadow-none;
+  }
+  .map-popup,
+  .map-popup > .leaflet-popup-tip-container > .leaflet-popup-tip {
+    @apply bg-base/50 backdrop-blur-sm;
+  }
+  .map-popup > .leaflet-popup-close-button > * {
+    @apply text-text;
   }
 }
