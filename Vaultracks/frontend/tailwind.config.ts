@@ -3,7 +3,10 @@ import catppuccin from "@catppuccin/tailwindcss";
 import tailwindExtendedShadows from "tailwind-extended-shadows";
 
 export default {
-	content: ["./pages/**/*.{html,js}"],
+	content: [
+		"./pages/**/*.html",
+		"./scripts/**/*.ts",
+	],
 	theme: {
 		extend: {},
 	},

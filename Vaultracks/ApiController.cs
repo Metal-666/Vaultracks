@@ -36,6 +36,7 @@ public class ApiController : ControllerBase {
 	[HttpPost("message")]
 	[ProducesResponseType(StatusCodes.Status200OK)]
 	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	[ProducesResponseType(StatusCodes.Status500InternalServerError)]
 	public virtual async Task<ActionResult> PostMessage([FromHeader(Name = "Authorization")] string base64auth) {
 
 		using StreamReader bodyReader = new(Request.Body);
@@ -77,7 +78,7 @@ public class ApiController : ControllerBase {
 
 		}
 
-		SQLiteAsyncConnection? db = await GetOrCreateDB(dbAccess);
+		SQLiteAsyncConnection? db = await GetDb(dbAccess, true);
 
 		if(db == null) {
 
@@ -122,11 +123,11 @@ public class ApiController : ControllerBase {
 
 		}
 
-		SQLiteAsyncConnection? db = await GetOrCreateDB(dbAccess);
+		SQLiteAsyncConnection? db = await GetDb(dbAccess, false);
 
 		if(db == null) {
 
-			return Problem("Failed to open the database!");
+			return StatusCode(StatusCodes.Status500InternalServerError, "Failed to open the database! Is the username/password correct? Does the db exist?");
 
 		}
 
@@ -138,7 +139,7 @@ public class ApiController : ControllerBase {
 
 		if(location == null) {
 
-			return Problem("");
+			return StatusCode(StatusCodes.Status500InternalServerError, "Failed to retrieve location!");
 
 		}
 
@@ -165,16 +166,24 @@ public class ApiController : ControllerBase {
 
 	}
 
-	protected virtual async Task<SQLiteAsyncConnection?> GetOrCreateDB(DBAccess dbAccess) {
+	protected virtual async Task<SQLiteAsyncConnection?> GetDb(DBAccess dbAccess, bool createIfDoesNotExist) {
 
 		try {
 
 			if(!ActiveDatabaseConnections.TryGetValue(dbAccess, out SQLiteAsyncConnection? db)) {
 
+				SQLiteOpenFlags flags =
+					SQLiteOpenFlags.ReadWrite |
+						SQLiteOpenFlags.FullMutex;
+
+				if(createIfDoesNotExist) {
+
+					flags |= SQLiteOpenFlags.Create;
+
+				}
+
 				db = new(new SQLiteConnectionString(GetDatabaseFilePath(dbAccess.Username),
-																					SQLiteOpenFlags.ReadWrite |
-																								SQLiteOpenFlags.Create |
-																								SQLiteOpenFlags.FullMutex,
+																					flags,
 																					true,
 																					dbAccess.DatabaseKey));
 
