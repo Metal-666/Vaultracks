@@ -16,7 +16,7 @@ public class Program {
 		WebApplicationBuilder builder =
 			WebApplication.CreateSlimBuilder(args);
 
-		builder.Services.AddControllers();
+		builder.Services.AddControllers().AddControllersAsServices();
 		builder.Services.AddEndpointsApiExplorer();
 		builder.Services.AddSwaggerGen();
 		builder.Services.AddHttpLogging(options => { });
@@ -32,6 +32,7 @@ public class Program {
 
 		app.UseStaticFiles();
 		app.UseHttpLogging();
+		app.UseWebSockets();
 
 		app.MapGet("/", () => Results.Redirect("/index.html"));
 
@@ -43,11 +44,11 @@ public class Program {
 
 				app.Logger.LogInformation("Closing db connections...");
 
-				foreach((DBAccess dbAccess, SQLiteAsyncConnection Db) in ApiController.ActiveDatabaseConnections) {
+				foreach((UserAuth userAuth, SQLiteAsyncConnection Db) in DatabaseManager.ActiveConnections) {
 
 					await Db.CloseAsync();
 
-					app.Logger.LogInformation("Closing db for {username}", dbAccess.Username);
+					app.Logger.LogInformation("Closing db for {username}", userAuth.Username);
 
 				}
 

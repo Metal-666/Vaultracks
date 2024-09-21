@@ -5,13 +5,9 @@ using Microsoft.Extensions.Logging;
 using SQLite;
 
 using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.IO;
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 namespace Vaultracks;
@@ -20,16 +16,13 @@ namespace Vaultracks;
 [Route("api")]
 public class ApiController : ControllerBase {
 
-	public const string DataDirectory = "/data";
-
-	public static ConcurrentDictionary<DBAccess, SQLiteAsyncConnection> ActiveDatabaseConnections { get; protected set; } =
-		new();
-
 	protected virtual ILogger Logger { get; set; }
+	protected virtual WebSocketController WsController { get; set; }
 
-	public ApiController(ILogger<ApiController> logger) {
+	public ApiController(ILogger<ApiController> logger, WebSocketController wsController) {
 
 		Logger = logger;
+		WsController = wsController;
 
 	}
 
@@ -70,15 +63,15 @@ public class ApiController : ControllerBase {
 
 		}
 
-		DBAccess? dbAccess = ParseAuth(base64auth);
+		UserAuth? userAuth = UserAuth.ParseBase64(base64auth);
 
-		if(dbAccess == null) {
+		if(userAuth == null) {
 
 			return BadRequest("Please use HTTP Basic Authentication to pass username and database key!");
 
 		}
 
-		SQLiteAsyncConnection? db = await GetDb(dbAccess, true);
+		SQLiteAsyncConnection? db = await DatabaseManager.GetDb(userAuth, true);
 
 		if(db == null) {
 
@@ -108,22 +101,24 @@ public class ApiController : ControllerBase {
 
 		}
 
+		EventBus.LocationEvents.OnNext((userAuth, location));
+
 		return Ok("[]");
 
 	}
 
-	[HttpGet("location/latest")]
+	/*[HttpGet("location/latest")]
 	public virtual async Task<ActionResult<Location>> GetLatestLocation([FromHeader(Name = "Authorization")] string base64auth) {
 
-		DBAccess? dbAccess = ParseAuth(base64auth);
+		UserAuth? userAuth = UserAuth.Parse(base64auth);
 
-		if(dbAccess == null) {
+		if(userAuth == null) {
 
 			return BadRequest("Please use HTTP Basic Authentication to pass username and database key!");
 
 		}
 
-		SQLiteAsyncConnection? db = await GetDb(dbAccess, false);
+		SQLiteAsyncConnection? db = await GetDb(userAuth, false);
 
 		if(db == null) {
 
@@ -145,212 +140,12 @@ public class ApiController : ControllerBase {
 
 		return location;
 
-	}
-
-	protected virtual DBAccess? ParseAuth(string base64auth) {
-
-		const string BasicAuthPrefix = "Basic ";
-
-		if(!base64auth.StartsWith(BasicAuthPrefix)) {
-
-			return null;
-
-		}
-
-		string[] auth =
-			Encoding.UTF8
-					.GetString(Convert.FromBase64String(base64auth[BasicAuthPrefix.Length..]))
-					.Split(':');
-
-		return new(auth[0], auth[1]);
-
-	}
-
-	protected virtual async Task<SQLiteAsyncConnection?> GetDb(DBAccess dbAccess, bool createIfDoesNotExist) {
-
-		try {
-
-			if(!ActiveDatabaseConnections.TryGetValue(dbAccess, out SQLiteAsyncConnection? db)) {
-
-				SQLiteOpenFlags flags =
-					SQLiteOpenFlags.ReadWrite |
-						SQLiteOpenFlags.FullMutex;
-
-				if(createIfDoesNotExist) {
-
-					flags |= SQLiteOpenFlags.Create;
-
-				}
-
-				db = new(new SQLiteConnectionString(GetDatabaseFilePath(dbAccess.Username),
-																					flags,
-																					true,
-																					dbAccess.DatabaseKey));
-
-				await db.CreateTableAsync<Location>();
-
-				if(!ActiveDatabaseConnections.TryAdd(dbAccess, db)) {
-
-					await db.CloseAsync();
-
-					return null;
-
-				}
-
-			}
-
-			return db;
-
-		}
-
-		catch {
-
-			return null;
-
-		}
-
-	}
-
-	public static string GetDatabaseFilePath(string username) =>
-		Path.Combine(DataDirectory, $"{username}.db");
+	}*/
 
 }
-
-public record DBAccess(string Username, string DatabaseKey);
 
 public static class PayloadType {
 
 	public const string Location = "location";
-
-}
-
-public class Location {
-
-	[PrimaryKey, AutoIncrement, JsonIgnore]
-	public virtual long Id { get; set; }
-
-	public virtual string? BSSID { get; set; }
-
-	public virtual string? SSID { get; set; }
-
-	[JsonPropertyName("_id"), Ignore]
-	public virtual string? OTId { get; set; }
-
-	[JsonPropertyName("acc")]
-	public virtual int? Accuracy { get; set; }
-
-	[JsonPropertyName("alt")]
-	public virtual int? Altitude { get; set; }
-
-	[JsonPropertyName("batt")]
-	public virtual int? Battery { get; set; }
-
-	[JsonPropertyName("bs")]
-	public virtual BatteryStatus? BatteryStatus { get; set; }
-
-	[JsonPropertyName("cog")]
-	public virtual int? CourseOverGround { get; set; }
-
-	[JsonPropertyName("conn")]
-	public virtual string? ConnectionType { get; set; }
-
-	[JsonPropertyName("created_at")]
-	public virtual long? CreatedAt { get; set; }
-
-	[JsonPropertyName("lat")]
-	public virtual decimal? Latitude { get; set; }
-
-	[JsonPropertyName("lon")]
-	public virtual decimal? Longitude { get; set; }
-
-	[JsonPropertyName("rad")]
-	public virtual long? RadiusAroundRegion { get; set; }
-
-	[JsonPropertyName("t")]
-	public virtual string? Trigger { get; set; }
-
-	[JsonPropertyName("m")]
-	public virtual MonitoringMode? MonitoringMode { get; set; }
-
-	[JsonPropertyName("tid")]
-	public virtual string? TrackerID { get; set; }
-
-	[JsonPropertyName("topic")]
-	public virtual string? Topic { get; set; }
-
-	[JsonPropertyName("tst")]
-	public virtual long? Timestamp { get; set; }
-
-	[JsonPropertyName("vac")]
-	public virtual int? VerticalAccuracy { get; set; }
-
-	[JsonPropertyName("vel")]
-	public virtual int? Velocity { get; set; }
-
-	[JsonPropertyName("p")]
-	public virtual float? Pressure { get; set; }
-
-	[JsonPropertyName("poi")]
-	public virtual string? PointOfInterest { get; set; }
-
-	[JsonPropertyName("tag")]
-	public virtual string? Tag { get; set; }
-
-	public virtual string? InRegions => SubObjectAsString("inregions");
-
-	public virtual string? InRegionIds => SubObjectAsString("inrids");
-
-	[JsonExtensionData, Ignore]
-	public virtual Dictionary<string, JsonElement>? ExtensionData { get; set; }
-
-	public virtual string? SubObjectAsString(string key) {
-
-		if(ExtensionData == null) {
-
-			return null;
-
-		}
-
-		if(!ExtensionData.TryGetValue(key, out JsonElement element)) {
-
-			return null;
-
-		}
-
-		if(element.ValueKind == JsonValueKind.Null) {
-
-			return null;
-
-		}
-
-		return element.GetRawText();
-
-	}
-
-}
-
-public enum BatteryStatus {
-
-	Unknown,
-	Unplugged,
-	Charging,
-	Full
-
-}
-
-public enum MonitoringMode {
-
-	Quiet = -1,
-	Manual = 0,
-	Significant = 1,
-	Move = 2
-
-}
-
-public static class ConnectionType {
-
-	public const string Offline = "o";
-	public const string Wifi = "w";
-	public const string Mobile = "m";
 
 }
