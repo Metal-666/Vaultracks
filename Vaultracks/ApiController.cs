@@ -17,12 +17,10 @@ namespace Vaultracks;
 public class ApiController : ControllerBase {
 
 	protected virtual ILogger Logger { get; set; }
-	protected virtual WebSocketController WsController { get; set; }
 
-	public ApiController(ILogger<ApiController> logger, WebSocketController wsController) {
+	public ApiController(ILogger<ApiController> logger) {
 
 		Logger = logger;
-		WsController = wsController;
 
 	}
 
@@ -106,41 +104,6 @@ public class ApiController : ControllerBase {
 		return Ok("[]");
 
 	}
-
-	/*[HttpGet("location/latest")]
-	public virtual async Task<ActionResult<Location>> GetLatestLocation([FromHeader(Name = "Authorization")] string base64auth) {
-
-		UserAuth? userAuth = UserAuth.Parse(base64auth);
-
-		if(userAuth == null) {
-
-			return BadRequest("Please use HTTP Basic Authentication to pass username and database key!");
-
-		}
-
-		SQLiteAsyncConnection? db = await GetDb(userAuth, false);
-
-		if(db == null) {
-
-			return StatusCode(StatusCodes.Status500InternalServerError, "Failed to open the database! Is the username/password correct? Does the db exist?");
-
-		}
-
-		Location? location =
-			await db.Table<Location>()
-					.OrderByDescending(location =>
-													location.CreatedAt)
-					.FirstOrDefaultAsync();
-
-		if(location == null) {
-
-			return StatusCode(StatusCodes.Status500InternalServerError, "Failed to retrieve location!");
-
-		}
-
-		return location;
-
-	}*/
 
 }
 

@@ -16,7 +16,7 @@ public class Program {
 		WebApplicationBuilder builder =
 			WebApplication.CreateSlimBuilder(args);
 
-		builder.Services.AddControllers().AddControllersAsServices();
+		builder.Services.AddControllers();
 		builder.Services.AddEndpointsApiExplorer();
 		builder.Services.AddSwaggerGen();
 		builder.Services.AddHttpLogging(options => { });

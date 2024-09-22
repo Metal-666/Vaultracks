@@ -33,7 +33,41 @@
       <span class="m-1 text-lg">Vaultracks</span>
     </header>
 
-    <div id="map" class="h-full"></div>
+    <main class="relative h-full">
+      <div id="map" class="h-full"></div>
+
+      <div
+        class="absolute right-0 top-0 z-[10000] m-1 flex flex-col overflow-hidden rounded-md bg-crust/50 backdrop-blur-md"
+      >
+        <div class="bg-crust/50 px-2 py-1">
+          <span>Current Location:</span>
+        </div>
+        <div class="grid grid-cols-[min-content_275px] gap-x-2 gap-y-[2px] p-2">
+          <span>Coordinates:</span>
+          <input id="current-coordinates" class="text-input" readonly />
+          <span>Timestamp:</span>
+          <input id="current-timestamp" class="text-input" readonly />
+        </div>
+        <hr class="border-text" />
+        <div class="p-2">
+          <div>
+            <input id="follow-marker-checkbox" type="checkbox" checked />
+            <label for="follow-marker-checkbox">Follow marker</label>
+          </div>
+          <div class="flex flex-col">
+            <label for="map-zoom-slider">Zoom level</label>
+            <input
+              id="map-zoom-slider"
+              type="range"
+              min="5"
+              max="19"
+              value="15"
+              onchange="mapZoomChanged()"
+            />
+          </div>
+        </div>
+      </div>
+    </main>
 
     <div
       id="open-database-dialog-barrier"
@@ -63,22 +97,12 @@
               name="password"
               autocomplete="current-password"
           /></label>
-          <button
-            type="button"
-            class="button-primary"
-            onclick="openDatabase();"
-          >
+          <button type="button" class="button-primary" onclick="openDatabase()">
             Open
           </button>
         </form>
       </div>
     </div>
-
-    <template id="location-popup-content-template">
-      <div>
-        <span id="date-and-time"></span>
-      </div>
-    </template>
 
     <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
     <script src="/scripts/index.js"></script>

@@ -1,3 +1,17 @@
+const currentCoordinates = document.getElementById(
+  "current-coordinates",
+) as HTMLInputElement;
+const currentTimestamp = document.getElementById(
+  "current-timestamp",
+) as HTMLInputElement;
+
+const followMarkerCheckbox = document.getElementById(
+  "follow-marker-checkbox",
+) as HTMLInputElement;
+const mapZoomSlider = document.getElementById(
+  "map-zoom-slider",
+) as HTMLInputElement;
+
 const openDatabaseDialogBarrier = document.getElementById(
   "open-database-dialog-barrier",
 ) as HTMLElement;
@@ -5,9 +19,6 @@ const usernameInput = document.getElementById(
   "username-input",
 ) as HTMLInputElement;
 const dbKeyInput = document.getElementById("db-key-input") as HTMLInputElement;
-const locationPopupContentTemplate = document.getElementById(
-  "location-popup-content-template",
-) as HTMLTemplateElement;
 
 const map = L.map("map").setView([51.505, -0.09], 13);
 
@@ -18,6 +29,10 @@ L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
 }).addTo(map);
 
 let marker: L.Marker | undefined;
+
+function mapZoomChanged() {
+  map.setZoom(mapZoomSlider.valueAsNumber);
+}
 
 async function openDatabase() {
   console.log("Opening db...");
@@ -113,83 +128,19 @@ async function openDatabase() {
           marker.setLatLng(latLng);
         }
 
-        // const locationPopupContent = locationPopupContentTemplate.content
-        //   .cloneNode(true) as DocumentFragment;
+        currentCoordinates.value = `${location.lat}, ${location.lon}`;
+        currentTimestamp.value = location.created_at == null
+          ? "unknown"
+          : new Date(location.created_at * 1000).toUTCString();
 
-        // const dateAndTime = locationPopupContent.getElementById(
-        //   "date-and-time",
-        // ) as HTMLElement;
-
-        // dateAndTime.textContent = new Date(location.created_at * 1000)
-        //   .toUTCString();
-        // dateAndTime.id = "";
-
-        // marker.bindPopup(locationPopupContent.getRootNode() as HTMLElement, {
-        //   className: "map-popup",
-        // })
-        //   .openPopup();
-
-        map.flyTo(latLng, 15);
+        if (followMarkerCheckbox.checked) {
+          map.flyTo(latLng, mapZoomSlider.valueAsNumber);
+        }
 
         break;
       }
     }
   });
-
-  // const response = await fetch("api/location/latest", {
-  //   headers: {
-  //     "Authorization": `Basic ${
-  //       btoa(`${}:${}`)
-  //     }`,
-  //   },
-  // });
-
-  // if (!response.ok) {
-  //   showToast(
-  //     {
-  //       text: await response.text(),
-  //       duration: -1,
-  //       newWindow: true,
-  //       close: true,
-  //       gravity: "bottom",
-  //       position: "center",
-  //     },
-  //     "bg-gradient-to-r",
-  //     "from-red",
-  //     "to-maroon",
-  //     "text-crust",
-  //     "[&_*]:text-crust",
-  //     "cursor-default",
-  //     "[&_*]:opacity-100",
-  //   );
-
-  //   return;
-  // }
-
-  // const location = await response.json() as OTLocation;
-
-  // const latLng: L.LatLngExpression = [location.lat, location.lon];
-
-  // const marker = L.marker(latLng).addTo(map);
-
-  // const locationPopupContent = locationPopupContentTemplate.content
-  //   .cloneNode(true) as DocumentFragment;
-
-  // const dateAndTime = locationPopupContent.getElementById(
-  //   "date-and-time",
-  // ) as HTMLElement;
-
-  // dateAndTime.textContent = new Date(location.created_at * 1000).toUTCString();
-  // dateAndTime.id = "";
-
-  // marker.bindPopup(locationPopupContent.getRootNode() as HTMLElement, {
-  //   className: "map-popup",
-  // })
-  //   .openPopup();
-
-  // map.flyTo(latLng, 15);
-
-  // openDatabaseDialogBarrier.classList.add("hidden");
 }
 
 function sendWsMessage(

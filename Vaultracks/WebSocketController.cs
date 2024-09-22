@@ -93,7 +93,12 @@ public class WebSocketController : ControllerBase {
 
 		CancellationTokenSource cancellationTokenSource = new();
 
-		while(true) {
+		WebSocketCloseStatus closeStatus = WebSocketCloseStatus.NormalClosure;
+		string? closeStatusDescription = null;
+
+		List<IDisposable> subscriptions = new();
+
+		while(connection.WebSocket.State != WebSocketState.Closed) {
 
 			Timer timeout = new(TimeSpan.FromSeconds(20));
 
@@ -113,21 +118,15 @@ public class WebSocketController : ControllerBase {
 
 			if(cancellationTokenSource.IsCancellationRequested) {
 
-				await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure,
-											"Connection timeout!",
-											CancellationToken.None);
+				closeStatusDescription = "Connection timeout!";
 
-				return;
+				break;
 
 			}
 
 			if(result.CloseStatus.HasValue) {
 
-				await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure,
-											null,
-											CancellationToken.None);
-
-				return;
+				break;
 
 			}
 
@@ -205,22 +204,37 @@ public class WebSocketController : ControllerBase {
 
 					connection.ReceiveLocationUpdates = true;
 
-					EventBus.LocationEvents
-							.Where(locationEvent =>
-												locationEvent.UserAuth == userAuth)
-							.Select(locationEvent =>
-												locationEvent.Location)
-							.Subscribe(async location => {
+					IDisposable subscription =
+						EventBus.LocationEvents
+								.Where(locationEvent =>
+													locationEvent.UserAuth == userAuth)
+								.Select(locationEvent =>
+													locationEvent.Location)
+								.Scan<Location, (Location? Previous, Location Current)>((null, null!),
+																						(accumulated,
+																									currentLocation) =>
+																										(accumulated.Current, currentLocation))
+								.Where((locationPair) =>
+													locationPair.Previous == null ||
+														!locationPair.Current.CreatedAt.HasValue ||
+														!locationPair.Previous.CreatedAt.HasValue ||
+														locationPair.Current.CreatedAt >
+															locationPair.Previous.CreatedAt)
+								.Select(locationPair =>
+													locationPair.Current)
+								.Subscribe(async location => {
 
-								await SendMessage(connection.WebSocket,
-													new() {
+									await SendMessage(connection.WebSocket,
+														new() {
 
-														Command = Command.LocationUpdate,
-														LocationJson = JsonSerializer.Serialize(location)
+															Command = Command.LocationUpdate,
+															LocationJson = JsonSerializer.Serialize(location)
 
-													});
+														});
 
-							});
+								});
+
+					subscriptions.Add(subscription);
 
 					SQLiteAsyncConnection? db = await DatabaseManager.GetDb(userAuth, true);
 
@@ -264,29 +278,21 @@ public class WebSocketController : ControllerBase {
 
 		}
 
-	}
+		Connections.Remove(connection);
 
-	public virtual async Task ReceivedLocationUpdate(UserAuth userAuth, Location location) {
+		foreach(IDisposable subscription in subscriptions) {
 
-		WebSocketConnection? connection =
-			Connections.Where(connection =>
-										connection.ReceiveLocationUpdates)
-						.FirstOrDefault(connection =>
-													connection.UserAuth == userAuth);
-
-		if(connection == null) {
-
-			return;
+			subscription.Dispose();
 
 		}
 
-		await SendMessage(connection.WebSocket,
-							new() {
+		await webSocket.CloseAsync(closeStatus,
+									closeStatusDescription,
+									CancellationToken.None);
 
-								Command = Command.LocationUpdate,
-								LocationJson = JsonSerializer.Serialize(location)
+		webSocket.Dispose();
 
-							});
+		Logger.LogInformation("WS connection closed!");
 
 	}
 
@@ -294,7 +300,15 @@ public class WebSocketController : ControllerBase {
 
 		string jsonData = JsonSerializer.Serialize(message, JsonSerializerOptions);
 
-		Logger.LogWarning("Sending message: {jsonData}", jsonData);
+		Logger.LogDebug("Sending WS message: {jsonData}", jsonData);
+
+		if(webSocket.State != WebSocketState.Open) {
+
+			Logger.LogWarning("Failed to send WS message: connection state is {state}!", webSocket.State);
+
+			return;
+
+		}
 
 		await webSocket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(jsonData)),
 									WebSocketMessageType.Text,
