@@ -15,6 +15,12 @@
     <link rel="stylesheet" href="/css/styles.min.css" />
 
     <script
+      src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.2/anime.min.js"
+      integrity="sha512-aNMyYYxdIxIaot0Y1/PLuEu3eipGCmsEUBrUq+7aVyPGMFH8z0eTP0tkqAvv34fzN6z+201d3T8HPb1svWSKHQ=="
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    ></script>
+    <script
       src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
       integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
       crossorigin=""
@@ -29,27 +35,39 @@
   <body
     class="mocha m-0 flex size-full flex-col content-stretch justify-stretch bg-gradient-to-br from-surface0 to-crust p-0 font-mono text-text"
   >
-    <header class="flex h-10">
-      <span class="m-1 text-lg">Vaultracks</span>
+    <header class="flex">
+      <span class="m-2 text-lg">Vaultracks</span>
     </header>
 
     <main class="relative h-full">
       <div id="map" class="h-full"></div>
 
-      <div
-        class="absolute right-0 top-0 z-[10000] m-1 flex flex-col overflow-hidden rounded-md bg-crust/50 backdrop-blur-md"
-      >
-        <div class="bg-crust/50 px-2 py-1">
+      <div class="panel absolute left-0 top-0 z-[10000] w-[200px]">
+        <header>
+          <span>Tools:</span>
+        </header>
+        <section>
+          <button
+            class="button-secondary w-full"
+            onclick="setDialog(dialogTemplates.drawPath)"
+          >
+            Draw path
+          </button>
+        </section>
+      </div>
+
+      <div class="panel absolute right-0 top-0 z-[10000]">
+        <header>
           <span>Current Location:</span>
-        </div>
-        <div class="grid grid-cols-[min-content_275px] gap-x-2 gap-y-[2px] p-2">
+        </header>
+        <section class="grid grid-cols-[min-content_275px] gap-x-2 gap-y-[2px]">
           <span>Coordinates:</span>
           <input id="current-coordinates" class="text-input" readonly />
           <span>Timestamp:</span>
           <input id="current-timestamp" class="text-input" readonly />
-        </div>
+        </section>
         <hr class="border-text" />
-        <div class="p-2">
+        <section>
           <div>
             <input id="follow-marker-checkbox" type="checkbox" checked />
             <label for="follow-marker-checkbox">Follow marker</label>
@@ -65,44 +83,125 @@
               onchange="mapZoomChanged()"
             />
           </div>
-        </div>
+        </section>
+        <hr class="border-text" />
+        <section>
+          <span id="location-updated"></span>
+        </section>
       </div>
     </main>
 
     <div
-      id="open-database-dialog-barrier"
-      class="absolute z-[10000] flex h-full w-full items-center justify-center bg-crust/25"
+      id="dialog-barrier"
+      class="glass absolute z-[10000] flex h-full w-full items-center justify-center bg-crust/35"
+      style="opacity: 0; display: none"
     >
-      <div
-        class="flex flex-col overflow-hidden rounded-md bg-crust/50 text-text backdrop-blur-md"
-      >
-        <div class="bg-crust/50 px-2 py-1">
-          <span>Open database</span>
-        </div>
-        <form class="m-0 flex flex-col p-2">
-          <label class="mb-2 mt-1"
-            >Username:
-            <input
-              id="username-input"
-              class="text-input"
-              name="username"
-              autocomplete="nickname"
-          /></label>
-          <label class="mb-3"
-            >Database Key:
-            <input
-              id="db-key-input"
-              type="password"
-              class="text-input"
-              name="password"
-              autocomplete="current-password"
-          /></label>
-          <button type="button" class="button-primary" onclick="openDatabase()">
-            Open
-          </button>
-        </form>
-      </div>
+      <div id="dialog-wrapper" class="absolute-center [&>*]:panel"></div>
     </div>
+
+    <template id="open-database-dialog-template">
+      <div style="transform: scale(0)">
+        <header>
+          <span>Open database</span>
+        </header>
+        <section>
+          <form name="open-database" class="m-0 flex flex-col gap-y-2">
+            <div
+              class="grid grid-cols-[max-content_min-content] gap-x-2 gap-y-[2px]"
+            >
+              <label for="username">Username:</label>
+              <input
+                name="username"
+                autocomplete="nickname"
+                class="text-input"
+              />
+              <label for="password">Database Key:</label>
+              <input
+                name="password"
+                type="password"
+                autocomplete="current-password"
+                class="text-input"
+              />
+            </div>
+            <button
+              type="button"
+              class="button-primary"
+              onclick="openDatabase()"
+            >
+              Open
+            </button>
+          </form>
+        </section>
+      </div>
+    </template>
+    <template id="draw-path-dialog-template">
+      <div style="transform: scale(0)">
+        <header class="flex justify-between">
+          Draw path
+          <button
+            class="hover:glass rounded-sm p-1 text-xs uppercase transition-colors duration-75 hover:bg-crust/25"
+            onclick="setDialog()"
+          >
+            Close
+          </button>
+        </header>
+        <section>
+          <form name="draw-path" class="flex flex-col items-center gap-y-2">
+            <div
+              class="grid grid-cols-[min-content_max-content_min-content] gap-x-2 gap-y-[2px]"
+            >
+              <span class="col-span-3">Time range:</span>
+              <input
+                name="datetime-from-checkbox"
+                type="checkbox"
+                onchange="toggleDateTimeInput(this.form, 'datetime-from', this.checked)"
+              />
+              <label>From:</label>
+              <input
+                name="datetime-from"
+                type="datetime-local"
+                class="text-input"
+                disabled
+              />
+              <input
+                name="datetime-to-checkbox"
+                type="checkbox"
+                onchange="toggleDateTimeInput(this.form, 'datetime-to', this.checked)"
+              />
+              <label>To:</label>
+              <input
+                name="datetime-to"
+                type="datetime-local"
+                class="text-input"
+                disabled
+              />
+
+              <script>
+                function toggleDateTimeInput(form, inputName, enable) {
+                  form.elements.namedItem(inputName).disabled = !enable;
+                }
+              </script>
+            </div>
+            <button
+              type="button"
+              class="button-primary w-1/2"
+              onclick="drawPath()"
+            >
+              Draw
+            </button>
+          </form>
+        </section>
+      </div>
+    </template>
+
+    <template id="path-point-popup-content-template">
+      <section class="grid grid-cols-[min-content_200px] gap-x-2 gap-y-[2px]">
+        <span>Coordinates:</span>
+        <input class="popup-coordinates" class="text-input" readonly />
+        <span>Timestamp:</span>
+        <input class="popup-timestamp" class="text-input" readonly />
+      </section>
+    </template>
 
     <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
     <script src="/scripts/index.js"></script>

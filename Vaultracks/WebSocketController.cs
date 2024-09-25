@@ -274,6 +274,58 @@ public class WebSocketController : ControllerBase {
 
 				}
 
+				case Command.RequestLocations: {
+
+					SQLiteAsyncConnection? db = await DatabaseManager.GetDb(userAuth, true);
+
+					if(db == null) {
+
+						await SendError(connection.WebSocket,
+										"Failed to initialize the database!");
+
+						break;
+
+					}
+
+					// Unfortunately, the sqlite library I'm using is having trouble
+					// compiling sql queries from linq where functions or properties are used.
+					// This is why the following code is unfolded and simplified to avoid using
+					// .Value and .HasValue properties inside the .Where statements.
+					bool hasFromTimestamp = message.FromTimestamp.HasValue;
+					bool hasToTimestamp = message.ToTimestamp.HasValue;
+
+					int fromTimestamp = hasFromTimestamp ? message.FromTimestamp!.Value : 0;
+					int toTimestamp = hasToTimestamp ? message.ToTimestamp!.Value : 0;
+
+					List<Location> locations =
+						await db.Table<Location>()
+								.Where(location =>
+												location.CreatedAt != null)
+								.Where(location =>
+												(!hasFromTimestamp ||
+													location.CreatedAt >= fromTimestamp) &&
+												(!hasToTimestamp ||
+													location.CreatedAt <= toTimestamp))
+								.OrderByDescending(location =>
+																location.CreatedAt)
+								.ToListAsync();
+
+					foreach(Location location in locations) {
+
+						await SendMessage(connection.WebSocket,
+											new() {
+
+												Command = Command.RequestedLocation,
+												LocationJson = JsonSerializer.Serialize(location)
+
+											});
+
+					}
+
+					break;
+
+				}
+
 			}
 
 		}
@@ -345,6 +397,8 @@ public class WebSocketMessage {
 	public virtual string? ErrorMessage { get; set; }
 	public virtual string? ErrorDescription { get; set; }
 	public virtual string? LocationJson { get; set; }
+	public virtual int? FromTimestamp { get; set; }
+	public virtual int? ToTimestamp { get; set; }
 
 }
 
@@ -353,6 +407,8 @@ public enum Command {
 	Ping,
 	Error,
 	SubscribeToLocationUpdates,
-	LocationUpdate
+	LocationUpdate,
+	RequestLocations,
+	RequestedLocation
 
 }
