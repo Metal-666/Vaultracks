@@ -99,12 +99,16 @@ async function openDatabase() {
     });
   });
 
-  webSocket.addEventListener("close", () => {
+  webSocket.addEventListener("close", (event) => {
     console.warn("WS connection closed!");
 
     showErrorToast(
-      "Something went really wrong!\nConnection to server was terminated!",
+      `WebSocket connection failed or was terminated! Reason:\n${
+        event.reason ? event.reason : "Possibly an internal error..."
+      }`,
     );
+
+    setDialog(dialogTemplates.openDatabase);
 
     if (keepAliveInterval == null) {
       return;
@@ -162,10 +166,14 @@ async function openDatabase() {
           marker.setLatLng(latLng);
         }
 
+        const createdAtWithTimestampFallback = location.created_at ??
+          location.tst;
+
         currentCoordinates.value = `${location.lat}, ${location.lon}`;
-        currentTimestamp.value = location.created_at == null
+        currentTimestamp.value = createdAtWithTimestampFallback == null
           ? "unknown"
-          : new Date(location.created_at * 1000).toUTCString();
+          : new Date(createdAtWithTimestampFallback * 1000)
+            .toLocaleString();
 
         if (followMarkerCheckbox.checked) {
           map.flyTo(latLng, mapZoomSlider.valueAsNumber);
@@ -197,7 +205,10 @@ async function openDatabase() {
           break;
         }
 
-        if (location.created_at == null) {
+        const createdAtWithTimestampFallback = location.created_at ??
+          location.tst;
+
+        if (createdAtWithTimestampFallback == null) {
           sendWsError("Timestamp missing from payload!");
 
           showErrorToast("Failed to add point: timestamp missing!");
@@ -207,8 +218,9 @@ async function openDatabase() {
 
         const latLng: L.LatLngExpression = [location.lat, location.lon];
 
-        const circle = L.circle(latLng, {
-          radius: 1,
+        const circle = L.circleMarker(latLng, {
+          radius: 6,
+          fillOpacity: 1,
           className: "stroke-mauve fill-mauve/50",
         }).addTo(map);
 
@@ -223,12 +235,14 @@ async function openDatabase() {
         (popupContent.getElementsByClassName(
           "popup-timestamp",
         ).item(0) as HTMLInputElement).value = new Date(
-          location.created_at * 1000,
+          createdAtWithTimestampFallback * 1000,
         )
-          .toUTCString();
+          .toLocaleString();
 
         const popup = L.popup({
           content: popupContent,
+          maxWidth: 500,
+          className: "custom-leaflet-popup",
         });
 
         circle.bindPopup(popup);
@@ -264,28 +278,36 @@ function drawPath() {
     "datetime-to",
   ) as HTMLInputElement;
 
-  const fromDate = fromInput.valueAsDate;
-  const toDate = toInput.valueAsDate;
+  const fromTimestamp = fromInput.valueAsNumber;
+  const toTimestamp = toInput.valueAsNumber;
 
-  const fromMissing = fromDate == null;
-  const toMissing = toDate == null;
+  let fromDate = Number.isNaN(fromTimestamp) ? null : new Date(fromTimestamp);
+  let toDate = Number.isNaN(toTimestamp) ? null : new Date(toTimestamp);
+
+  if (fromDate) {
+    fromDate = new Date(fromDate.toISOString().slice(0, -5));
+  }
+
+  if (toDate) {
+    toDate = new Date(toDate.toISOString().slice(0, -5));
+  }
 
   console.log(`Time frame: ${fromDate} -> ${toDate}`);
 
-  if (fromCheckbox.checked && fromMissing) {
+  if (fromCheckbox.checked && !fromDate) {
     showErrorToast("Please enter the 'from' date & time!", 5 * 1000);
 
     return;
   }
 
-  if (toCheckbox.checked && toMissing) {
+  if (toCheckbox.checked && !toDate) {
     showErrorToast("Please enter the 'to' date & time!", 5 * 1000);
 
     return;
   }
 
   if (
-    (!fromMissing && !toMissing) &&
+    (fromDate && toDate) &&
     (fromDate > toDate)
   ) {
     showErrorToast("Invalid time frame (from > to)!", 5 * 1000);
@@ -297,8 +319,8 @@ function drawPath() {
 
   sendWsMessage({
     command: WebSocketCommand.requestLocations,
-    fromTimestamp: fromMissing ? undefined : fromDate.valueOf() / 1000,
-    toTimestamp: toMissing ? undefined : toDate.valueOf() / 1000,
+    fromTimestamp: !fromDate ? undefined : fromDate.getTime() / 1000,
+    toTimestamp: !toDate ? undefined : toDate.getTime() / 1000,
   });
 }
 
@@ -373,43 +395,38 @@ let currentDialog:
   | { element: HTMLElement; template: HTMLTemplateElement }
   | undefined;
 
+let currentDialogAnimation: anime.AnimeTimelineInstance | undefined;
+
 function setDialog(dialogTemplate?: HTMLTemplateElement) {
-  if (currentDialog?.template === dialogTemplate) {
-    console.error("Attempted to open the same dialog twice!");
+  console.log("Setting dialog: ", dialogTemplate);
+  console.log("Current dialog: ", currentDialog);
 
-    return;
-  }
+  if (dialogTemplate == null) {
+    if (currentDialog != null) {
+      cancelAnimation(currentDialogAnimation);
 
-  if (currentDialog != null) {
-    if (dialogTemplate != null) {
-      console.error("Attempted to overwrite current dialog!");
+      currentDialogAnimation = anime.timeline({
+        duration: 300,
+        easing: "easeInOutQuint",
+        complete: () => {
+          dialogBarrier.style.display = "none";
 
-      return;
+          currentDialog?.element.remove();
+          currentDialog = undefined;
+        },
+      }).add({
+        targets: currentDialog.element,
+        scale: 0,
+      }, 0).add({
+        targets: dialogBarrier,
+        opacity: 0,
+      }, 0);
     }
 
-    anime.timeline({
-      duration: 300,
-      easing: "easeInOutQuint",
-      complete: () => {
-        dialogBarrier.style.display = "none";
-
-        currentDialog?.element.remove();
-        currentDialog = undefined;
-      },
-    }).add({
-      targets: currentDialog.element,
-      scale: 0,
-    }, 0).add({
-      targets: dialogBarrier,
-      opacity: 0,
-    }, 0);
-
-    return;
-  } else if (dialogTemplate == null) {
-    console.error("Attempted to remove non-existent dialog!");
-
     return;
   }
+
+  currentDialog?.element.remove();
 
   const dialogFragment = dialogTemplate.content.cloneNode(
     true,
@@ -424,7 +441,9 @@ function setDialog(dialogTemplate?: HTMLTemplateElement) {
     template: dialogTemplate,
   };
 
-  anime.timeline({
+  cancelAnimation(currentDialogAnimation);
+
+  currentDialogAnimation = anime.timeline({
     duration: 300,
     easing: "easeInOutCirc",
     begin: () => {
@@ -440,6 +459,14 @@ function setDialog(dialogTemplate?: HTMLTemplateElement) {
 }
 
 setDialog(dialogTemplates.openDatabase);
+
+function cancelAnimation(animation: anime.AnimeInstance | undefined) {
+  if (!animation) {
+    return;
+  }
+
+  anime.running.splice(anime.running.indexOf(animation), 1);
+}
 
 interface OTLocation {
   bssid?: string;

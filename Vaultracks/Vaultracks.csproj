@@ -7,17 +7,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="frontend-svelte\**" />
-    <Compile Remove="frontend-vue\**" />
     <Compile Remove="frontend\**" />
-    <Content Remove="frontend-svelte\**" />
-    <Content Remove="frontend-vue\**" />
     <Content Remove="frontend\**" />
-    <EmbeddedResource Remove="frontend-svelte\**" />
-    <EmbeddedResource Remove="frontend-vue\**" />
     <EmbeddedResource Remove="frontend\**" />
-    <None Remove="frontend-svelte\**" />
-    <None Remove="frontend-vue\**" />
     <None Remove="frontend\**" />
   </ItemGroup>
 
@@ -29,7 +21,7 @@
   </ItemGroup>
 
   <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
-    <Exec Command="powershell.exe -File &quot;$(ProjectDir)prebuild.ps1&quot;" />
+    <Exec Command="pwsh -File &quot;$(ProjectDir)prebuild.ps1&quot;" />
   </Target>
 
 </Project>

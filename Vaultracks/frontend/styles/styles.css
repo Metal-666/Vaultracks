@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer {
+@layer base {
   input {
     @apply accent-mauve;
   }
@@ -31,6 +31,23 @@
   }
   .panel > section {
     @apply p-2;
+  }
+
+  .custom-leaflet-popup {
+  }
+
+  .custom-leaflet-popup > .leaflet-popup-content-wrapper {
+    @apply glass rounded-md bg-crust/50 text-text shadow-none;
+  }
+
+  .custom-leaflet-popup
+    > .leaflet-popup-content-wrapper
+    > .leaflet-popup-content {
+    @apply m-2;
+  }
+
+  .custom-leaflet-popup > .leaflet-popup-tip-container > .leaflet-popup-tip {
+    @apply glass bg-crust/50 shadow-none;
   }
 
   .absolute-center {

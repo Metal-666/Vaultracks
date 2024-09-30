@@ -69,11 +69,17 @@ public class ApiController : ControllerBase {
 
 		}
 
-		SQLiteAsyncConnection? db = await DatabaseManager.GetDb(userAuth, true);
+		SQLiteAsyncConnection db;
 
-		if(db == null) {
+		try {
 
-			return Problem("Failed to initialize the database, please try again!");
+			db = await DatabaseManager.GetDb(userAuth, true);
+
+		}
+
+		catch(Exception e) {
+
+			return Problem($"Failed to initialize the database! ({e.Message})");
 
 		}
 

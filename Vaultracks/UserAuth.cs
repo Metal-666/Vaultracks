@@ -10,13 +10,13 @@ public record UserAuth(string Username, string DatabaseKey) {
 
 		(string? Username, string? DatabaseKey) = (WebUtility.UrlDecode(username), WebUtility.UrlDecode(databaseKey));
 
-		if(Username == null || DatabaseKey == null) {
+		if(Username == null) {
 
 			return null;
 
 		}
 
-		return new(Username, DatabaseKey);
+		return new(Username, DatabaseKey ?? "");
 
 	}
 

@@ -23,7 +23,7 @@
         "ASPNETCORE_HTTP_PORTS": "8080"
       },
       "publishAllPorts": true,
-      "DockerfileRunArguments": "-v \"J:\\Programming\\Projects\\Vaultracks\\data\":/data -p 12345:8080"
+      "DockerfileRunArguments": "-v \"{ProjectDir}/../demo-data:/data\" -p 12345:8080"
     }
   },
   "$schema": "http://json.schemastore.org/launchsettings.json",

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.HttpLogging;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -19,7 +20,11 @@ public class Program {
 		builder.Services.AddControllers();
 		builder.Services.AddEndpointsApiExplorer();
 		builder.Services.AddSwaggerGen();
-		builder.Services.AddHttpLogging(options => { });
+		builder.Services.AddHttpLogging(options => {
+
+			options.LoggingFields |= HttpLoggingFields.ResponseBody;
+
+		});
 
 		WebApplication app = builder.Build();
 
@@ -53,6 +58,10 @@ public class Program {
 				}
 
 			});
+
+		app.Logger
+			.LogInformation("Enumerating databases: {dbNames}",
+							string.Join(", ", DatabaseManager.ListDbs()));
 
 		app.Run();
 

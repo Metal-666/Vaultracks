@@ -12,6 +12,7 @@ using System.Net.WebSockets;
 using System.Reactive.Linq;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -24,7 +25,8 @@ public class WebSocketController : ControllerBase {
 	protected static readonly JsonSerializerOptions JsonSerializerOptions =
 		new() {
 
-			PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+			PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+			DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
 
 		};
 
@@ -53,21 +55,9 @@ public class WebSocketController : ControllerBase {
 
 	}
 
-	[Route("/ws")]
+	[HttpGet("/ws")]
 	[ProducesResponseType(StatusCodes.Status400BadRequest)]
 	public virtual async Task Ws([FromQuery] string username, [FromQuery] string databaseKey) {
-
-		UserAuth? userAuth =
-			UserAuth.ParseUrlEncoded(username, databaseKey);
-
-		if(userAuth == null) {
-
-			Response.StatusCode = StatusCodes.Status400BadRequest;
-			await Response.WriteAsync("Failed to parse auth data!");
-
-			return;
-
-		}
 
 		if(!HttpContext.WebSockets.IsWebSocketRequest) {
 
@@ -78,7 +68,38 @@ public class WebSocketController : ControllerBase {
 
 		}
 
+		UserAuth? userAuth =
+			UserAuth.ParseUrlEncoded(username, databaseKey);
+
 		using WebSocket webSocket = await HttpContext.WebSockets.AcceptWebSocketAsync();
+
+		if(userAuth == null) {
+
+			await webSocket.CloseAsync(WebSocketCloseStatus.PolicyViolation,
+										"Failed to parse auth data!",
+										CancellationToken.None);
+
+			return;
+
+		}
+
+		SQLiteAsyncConnection db;
+
+		try {
+
+			db = await DatabaseManager.GetDb(userAuth, true);
+
+		}
+
+		catch(Exception e) {
+
+			await webSocket.CloseAsync(WebSocketCloseStatus.InternalServerError,
+										$"Failed to connect to the database! ({e.Message})",
+										CancellationToken.None);
+
+			return;
+
+		}
 
 		WebSocketConnection connection = new() {
 
@@ -110,19 +131,25 @@ public class WebSocketController : ControllerBase {
 
 			byte[] buffer = new byte[1024 * 4];
 
-			WebSocketReceiveResult result =
-				await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer),
-												cancellationTokenSource.Token);
+			WebSocketReceiveResult result;
 
-			timeout.Dispose();
+			try {
 
-			if(cancellationTokenSource.IsCancellationRequested) {
+				result =
+					await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer),
+													cancellationTokenSource.Token);
+
+			}
+
+			catch {
 
 				closeStatusDescription = "Connection timeout!";
 
 				break;
 
 			}
+
+			timeout.Dispose();
 
 			if(result.CloseStatus.HasValue) {
 
@@ -216,10 +243,10 @@ public class WebSocketController : ControllerBase {
 																										(accumulated.Current, currentLocation))
 								.Where((locationPair) =>
 													locationPair.Previous == null ||
-														!locationPair.Current.CreatedAt.HasValue ||
-														!locationPair.Previous.CreatedAt.HasValue ||
-														locationPair.Current.CreatedAt >
-															locationPair.Previous.CreatedAt)
+														!locationPair.Current.CreatedAtWithTimestampFallback.HasValue ||
+														!locationPair.Previous.CreatedAtWithTimestampFallback.HasValue ||
+														locationPair.Current.CreatedAtWithTimestampFallback >
+															locationPair.Previous.CreatedAtWithTimestampFallback)
 								.Select(locationPair =>
 													locationPair.Current)
 								.Subscribe(async location => {
@@ -236,27 +263,20 @@ public class WebSocketController : ControllerBase {
 
 					subscriptions.Add(subscription);
 
-					SQLiteAsyncConnection? db = await DatabaseManager.GetDb(userAuth, true);
-
-					if(db == null) {
-
-						await SendError(connection.WebSocket,
-										"Failed to initialize the database!");
-
-						break;
-
-					}
-
 					Location? location =
 						await db.Table<Location>()
 								.OrderByDescending(location =>
-																location.CreatedAt)
+																location.Id)
+								.ThenByDescending(location =>
+															location.Timestamp)
+								.ThenByDescending(location =>
+															location.CreatedAt)
 								.FirstOrDefaultAsync();
 
 					if(location == null) {
 
 						await SendError(connection.WebSocket,
-										"Failed to retrieve location!");
+										"Latest location not available");
 
 						break;
 
@@ -276,28 +296,18 @@ public class WebSocketController : ControllerBase {
 
 				case Command.RequestLocations: {
 
-					SQLiteAsyncConnection? db = await DatabaseManager.GetDb(userAuth, true);
-
-					if(db == null) {
-
-						await SendError(connection.WebSocket,
-										"Failed to initialize the database!");
-
-						break;
-
-					}
-
-					// Unfortunately, the sqlite library I'm using is having trouble
-					// compiling sql queries from linq where functions or properties are used.
-					// This is why the following code is unfolded and simplified to avoid using
-					// .Value and .HasValue properties inside the .Where statements.
+					// Unfortunately, the sqlite library I'm using is having trouble compiling sql queries from
+					// linq, where functions or properties are used (this also includes nullable properties).
+					// This is why the following code was unfolded, uglified, deconstructed and simplified to avoid using
+					// .Value, .HasValue and other properties inside the linq statements, while also dealing
+					// with the limited set of linq expressions, supported by the sql api.
 					bool hasFromTimestamp = message.FromTimestamp.HasValue;
 					bool hasToTimestamp = message.ToTimestamp.HasValue;
 
 					int fromTimestamp = hasFromTimestamp ? message.FromTimestamp!.Value : 0;
 					int toTimestamp = hasToTimestamp ? message.ToTimestamp!.Value : 0;
 
-					List<Location> locations =
+					List<Location> locationsWithCreatedAt =
 						await db.Table<Location>()
 								.Where(location =>
 												location.CreatedAt != null)
@@ -306,9 +316,24 @@ public class WebSocketController : ControllerBase {
 													location.CreatedAt >= fromTimestamp) &&
 												(!hasToTimestamp ||
 													location.CreatedAt <= toTimestamp))
-								.OrderByDescending(location =>
-																location.CreatedAt)
 								.ToListAsync();
+
+					List<Location> locationsWithTimestampOnly =
+						await db.Table<Location>()
+								.Where(location =>
+												location.Timestamp != null &&
+												location.CreatedAt == null)
+								.Where(location =>
+												(!hasFromTimestamp ||
+													location.Timestamp >= fromTimestamp) &&
+												(!hasToTimestamp ||
+													location.Timestamp <= toTimestamp))
+								.ToListAsync();
+
+					IEnumerable<Location> locations =
+						locationsWithCreatedAt.Concat(locationsWithTimestampOnly)
+												.OrderByDescending(location =>
+																				location.CreatedAtWithTimestampFallback);
 
 					foreach(Location location in locations) {
 
@@ -338,9 +363,19 @@ public class WebSocketController : ControllerBase {
 
 		}
 
-		await webSocket.CloseAsync(closeStatus,
-									closeStatusDescription,
-									CancellationToken.None);
+		if(new[] {
+
+			WebSocketState.Open,
+			WebSocketState.CloseReceived,
+			WebSocketState.CloseSent
+
+		}.Contains(webSocket.State)) {
+
+			await webSocket.CloseAsync(closeStatus,
+										closeStatusDescription,
+										CancellationToken.None);
+
+		}
 
 		webSocket.Dispose();
 
