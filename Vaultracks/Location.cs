@@ -170,7 +170,7 @@ public enum MonitoringMode {
 public static class ConnectionType {
 
 	public const string Offline = "o";
-	public const string Wifi = "w";
+	public const string WiFi = "w";
 	public const string Mobile = "m";
 
 }

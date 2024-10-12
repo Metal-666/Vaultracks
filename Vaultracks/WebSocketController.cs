@@ -30,7 +30,7 @@ public class WebSocketController : ControllerBase {
 
 		};
 
-	protected virtual List<WebSocketConnection> Connections { get; set; } = new();
+	protected virtual List<WebSocketConnection> Connections { get; set; } = [];
 
 	protected virtual ILogger Logger { get; set; }
 
@@ -117,7 +117,7 @@ public class WebSocketController : ControllerBase {
 		WebSocketCloseStatus closeStatus = WebSocketCloseStatus.NormalClosure;
 		string? closeStatusDescription = null;
 
-		List<IDisposable> subscriptions = new();
+		List<IDisposable> subscriptions = [];
 
 		while(connection.WebSocket.State != WebSocketState.Closed) {
 
@@ -189,7 +189,7 @@ public class WebSocketController : ControllerBase {
 
 				continue;
 
-			};
+			}
 
 			if(message == null) {
 
@@ -266,7 +266,7 @@ public class WebSocketController : ControllerBase {
 					Location? location =
 						await db.Table<Location>()
 								.OrderByDescending(location =>
-																location.Id)
+															location.Id)
 								.ThenByDescending(location =>
 															location.Timestamp)
 								.ThenByDescending(location =>

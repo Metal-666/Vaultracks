@@ -14,15 +14,9 @@ namespace Vaultracks;
 
 [ApiController]
 [Route("api")]
-public class ApiController : ControllerBase {
+public class ApiController(ILogger<ApiController> logger) : ControllerBase {
 
-	protected virtual ILogger Logger { get; set; }
-
-	public ApiController(ILogger<ApiController> logger) {
-
-		Logger = logger;
-
-	}
+	protected virtual ILogger Logger { get; set; } = logger;
 
 	[HttpPost("message")]
 	[ProducesResponseType(StatusCodes.Status200OK)]
@@ -45,10 +39,19 @@ public class ApiController : ControllerBase {
 		JsonNode? payloadType = payload?["_type"];
 
 		if(payloadType == null ||
-			payloadType.GetValueKind() != JsonValueKind.String ||
-			payloadType.GetValue<string>() != PayloadType.Location) {
+			payloadType.GetValueKind() != JsonValueKind.String) {
 
-			return BadRequest("Failed to process payload (not JSON/invalid '_type'/unsupported '_type')!");
+			return BadRequest("Failed to process payload (not JSON/invalid '_type')!");
+
+		}
+
+		string payloadTypeValue = payloadType.GetValue<string>();
+
+		if(payloadTypeValue != PayloadType.Location) {
+
+			Logger.LogWarning("The payload type ({payloadType}) is unsupported, discarding!", payloadTypeValue);
+
+			return Ok("[]");
 
 		}
 
